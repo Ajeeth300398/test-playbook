@@ -1,0 +1,15 @@
+---
+- name: new_api
+  hosts: all
+  gather_facts: false
+  become: yes
+  become_method: runas
+  become_user: Administrator
+  # vars_files:
+  # - main.yml
+  # - tier_api.yml
+  tasks:
+  - name: Install Notepad++ via Chocolatey
+    community.windows.win_chocolatey:
+      name: notepadplusplus
+      state: present
