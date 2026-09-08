@@ -1,20 +1,25 @@
 ---
-- name: Install Notepad++ on Windows EC2
-  hosts: windows
-  gather_facts: true
+- name: Install Notepad++ on Windows
+  hosts: all
+  gather_facts: false
+  become: true
+  become_method: runas
+  become_user: Administrator
 
   collections:
     - chocolatey.chocolatey
     - ansible.windows
 
-  tasks:
+  vars:
+    notepadplusplus_package_name: notepadplusplus
+    notepadplusplus_version: ""
+    notepadplusplus_install_paths:
+      - C:\Program Files\Notepad++\notepad++.exe
+      - C:\Program Files (x86)\Notepad++\notepad++.exe
 
+  tasks:
     - name: Verify Windows connectivity
       ansible.windows.win_ping:
-
-    - name: Display target Windows host
-      ansible.builtin.debug:
-        msg: "Installing Notepad++ on {{ inventory_hostname }}"
 
     - name: Ensure Chocolatey is installed
       chocolatey.chocolatey.win_chocolatey:
@@ -23,28 +28,24 @@
 
     - name: Install Notepad++
       chocolatey.chocolatey.win_chocolatey:
-        name: notepadplusplus
+        name: "{{ notepadplusplus_package_name }}"
+        version: "{{ notepadplusplus_version | default(omit, true) }}"
         state: present
+      register: notepadplusplus_install
 
-    - name: Verify Notepad++ installation
-      ansible.windows.win_powershell:
-        script: |
-          $paths = @(
-            "C:\Program Files\Notepad++\notepad++.exe",
-            "C:\Program Files (x86)\Notepad++\notepad++.exe"
-          )
+    - name: Check Notepad++ installation paths
+      ansible.windows.win_stat:
+        path: "{{ item }}"
+      loop: "{{ notepadplusplus_install_paths }}"
+      register: notepadplusplus_paths
+      changed_when: false
 
-          $installed = $paths | Where-Object {
-            Test-Path $_
-          }
-
-          if (-not $installed) {
-            throw "Notepad++ installation could not be verified."
-          }
-
-          Write-Output "Notepad++ installed successfully: $installed"
-      register: notepad_check
-
-    - name: Display installation result
-      ansible.builtin.debug:
-        var: notepad_check.output
+    - name: Confirm Notepad++ is installed
+      ansible.builtin.assert:
+        that:
+          - notepadplusplus_paths.results | selectattr('stat.exists') | list | length > 0
+        success_msg: >-
+          Notepad++ is installed on {{ inventory_hostname }}.
+        fail_msg: >-
+          Chocolatey completed, but Notepad++ was not found in the expected paths
+          on {{ inventory_hostname }}.
