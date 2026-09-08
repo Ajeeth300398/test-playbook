@@ -16,6 +16,7 @@
     ae_awx_cross_account_role: "arn:aws:iam::{{ owner_id }}:role/CrossAccountSignin-infra"
     aws_pem_secret_name: my-windows-key
     ansible_host: "{{ private_ip_address }}"
+    ansible_user: Administrator
     notepadplusplus_package_name: notepadplusplus
     notepadplusplus_version: ""
     notepadplusplus_install_paths:
