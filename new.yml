@@ -7,7 +7,6 @@
   become_user: Administrator
 
   collections:
-    - chocolatey.chocolatey
     - ansible.windows
 
   vars:
@@ -22,15 +21,54 @@
       ansible.windows.win_ping:
 
     - name: Ensure Chocolatey is installed
-      chocolatey.chocolatey.win_chocolatey:
-        name: chocolatey
-        state: present
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $chocolateyExecutable = Join-Path $env:ProgramData 'chocolatey\bin\choco.exe'
+
+          if (-not (Test-Path -LiteralPath $chocolateyExecutable)) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            Invoke-Expression ((New-Object Net.WebClient).DownloadString(
+              'https://community.chocolatey.org/install.ps1'
+            ))
+            $Ansible.Changed = $true
+          }
+
+          if (-not (Test-Path -LiteralPath $chocolateyExecutable)) {
+            throw 'Chocolatey installation completed, but choco.exe is unavailable.'
+          }
 
     - name: Install Notepad++
-      chocolatey.chocolatey.win_chocolatey:
-        name: "{{ notepadplusplus_package_name }}"
-        version: "{{ notepadplusplus_version | default(omit, true) }}"
-        state: present
+      ansible.windows.win_powershell:
+        parameters:
+          PackageName: "{{ notepadplusplus_package_name }}"
+          PackageVersion: "{{ notepadplusplus_version }}"
+          InstallPaths: "{{ notepadplusplus_install_paths }}"
+        script: |
+          param(
+            [string]$PackageName,
+            [string]$PackageVersion,
+            [string[]]$InstallPaths
+          )
+
+          $Ansible.Changed = $false
+          $isInstalled = $InstallPaths | Where-Object { Test-Path -LiteralPath $_ }
+          $chocolateyExecutable = Join-Path $env:ProgramData 'chocolatey\bin\choco.exe'
+
+          if (-not $isInstalled) {
+            $arguments = @('install', $PackageName, '--yes', '--no-progress')
+            if ($PackageVersion) {
+              $arguments += @('--version', $PackageVersion)
+            }
+
+            & $chocolateyExecutable @arguments
+            if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
+              throw "Chocolatey failed to install $PackageName (exit code $LASTEXITCODE)."
+            }
+
+            $Ansible.Changed = $true
+          }
       register: notepadplusplus_install
 
     - name: Check Notepad++ installation paths
