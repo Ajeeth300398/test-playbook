@@ -12,7 +12,7 @@
     - community.aws
 
   vars:
-    ae_hide_sensitive_data: false
+    ae_hide_sensitive_data: true
     ae_awx_cross_account_role: "arn:aws:iam::{{ owner_id }}:role/CrossAccountSignin-infra"
     aws_pem_secret_name: my-windows-key
     ansible_host: "{{ private_ip_address }}"
