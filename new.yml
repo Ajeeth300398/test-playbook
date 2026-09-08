@@ -1,66 +1,50 @@
 ---
-- name: new_api
-  hosts: all
-  gather_facts: false
-  become: yes
-  become_method: runas
-  become_user: Administrator
-  # vars_files:
-  # - main.yml
-  # - tier_api.yml
+- name: Install Notepad++ on Windows EC2
+  hosts: windows
+  gather_facts: true
+
+  collections:
+    - chocolatey.chocolatey
+    - ansible.windows
+
   tasks:
-    # - name: Assume cross account role for windows
-    #   community.aws.sts_assume_role:
-    #     role_arn: "{{ ae_awx_cross_account_role }}"
-    #     role_session_name: "CrossAccountSignin-infra"
-    #   register: assumed_role
-    #   delegate_to: localhost
-    #   changed_when: false
-    #   become: False
-    #   when: '"Windows" in platform_details'
-    
-    # - name: Get secret value
-    #   azure.azcollection.azure_rm_keyvaultsecret_info:
-    #     vault_uri: "https://{{ ae_prod_vault }}.vault.azure.net/"
-    #     name: "{{ key_name | regex_replace('_', '-') }}"
-    #   delegate_to: localhost
-    #   register: pem_pass
-    #   become: false
-    #   no_log: '{{ ae_hide_sensitive_data }}'
-    
-    # - name: Fail if "{{ key_name }}" secret value not set
-    #   ansible.builtin.fail:
-    #     msg: >-
-    #       The secret {{ key_name }} you are trying to retrieve is either not 
-    #       available in Azure Vault or you don't have required access to get the secret value.
-    #   when: pem_pass['secrets'][0]['secret'] is undefined
-    
-    # - block:
-    #     - name: get the Administrator password for windows
-    #       community.aws.ec2_win_password:
-    #         instance_id: '{{ instance_id }}'
-    #         region: "{{ placement['region'] }}"
-    #         key_data: "{{ pem_pass['secrets'][0]['secret'] }}"
-    #         access_key: "{{ assumed_role.sts_creds.access_key }}"
-    #         secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-    #         session_token: "{{ assumed_role.sts_creds.session_token }}"
-    #         wait: true
-    #       register: instance_password
-    #       delegate_to: localhost
-    #       become: False
-    #       no_log: '{{ ae_hide_sensitive_data }}'
-    
-    #     - name: set windows password
-    #       ansible.builtin.set_fact:
-    #         ansible_password: "{{ instance_password['win_password'] }}"
-    #       no_log: '{{ ae_hide_sensitive_data }}'
-    #   when: '"Windows" in platform_details'
-    
-    - name: Gathering facts
-      ansible.builtin.setup:
-        gather_timeout: 30
-        
-    - name: Install Notepad++ via Chocolatey
-      community.windows.win_chocolatey:
+
+    - name: Verify Windows connectivity
+      ansible.windows.win_ping:
+
+    - name: Display target Windows host
+      ansible.builtin.debug:
+        msg: "Installing Notepad++ on {{ inventory_hostname }}"
+
+    - name: Ensure Chocolatey is installed
+      chocolatey.chocolatey.win_chocolatey:
+        name: chocolatey
+        state: present
+
+    - name: Install Notepad++
+      chocolatey.chocolatey.win_chocolatey:
         name: notepadplusplus
         state: present
+
+    - name: Verify Notepad++ installation
+      ansible.windows.win_powershell:
+        script: |
+          $paths = @(
+            "C:\Program Files\Notepad++\notepad++.exe",
+            "C:\Program Files (x86)\Notepad++\notepad++.exe"
+          )
+
+          $installed = $paths | Where-Object {
+            Test-Path $_
+          }
+
+          if (-not $installed) {
+            throw "Notepad++ installation could not be verified."
+          }
+
+          Write-Output "Notepad++ installed successfully: $installed"
+      register: notepad_check
+
+    - name: Display installation result
+      ansible.builtin.debug:
+        var: notepad_check.output
