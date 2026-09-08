@@ -95,8 +95,9 @@
       no_log: "{{ ae_hide_sensitive_data }}"
 
   tasks:
-    - name: Verify Windows connectivity
-      ansible.windows.win_ping:
+    - name: Gathering facts
+      ansible.builtin.setup:
+        gather_timeout: 30
 
     - name: Ensure Chocolatey is installed
       ansible.windows.win_powershell:
