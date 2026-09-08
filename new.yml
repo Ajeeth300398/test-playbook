@@ -12,9 +12,10 @@
     - community.aws
 
   vars:
-    ae_hide_sensitive_data: true
+    ae_hide_sensitive_data: false
     ae_awx_cross_account_role: "arn:aws:iam::{{ owner_id }}:role/CrossAccountSignin-infra"
     aws_pem_secret_name: my-windows-key
+    ansible_host: "{{ private_ip_address }}"
     notepadplusplus_package_name: notepadplusplus
     notepadplusplus_version: ""
     notepadplusplus_install_paths:
@@ -26,12 +27,13 @@
       ansible.builtin.assert:
         that:
           - instance_id is defined
+          - private_ip_address is defined
           - placement is defined
           - placement.region is defined
           - owner_id is defined
         fail_msg: >-
-          The EC2 inventory source must provide instance_id, placement.region,
-          and owner_id for EC2 Windows password decryption.
+          The EC2 inventory source must provide instance_id, private_ip_address,
+          placement.region, and owner_id for EC2 Windows password decryption.
       delegate_to: localhost
       become: false
 
