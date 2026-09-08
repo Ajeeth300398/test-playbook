@@ -16,7 +16,8 @@
     ae_awx_cross_account_role: "arn:aws:iam::{{ owner_id }}:role/CrossAccountSignin-infra"
     aws_pem_secret_name: my-windows-key
     ansible_host: "{{ private_ip_address }}"
-    ansible_user: Administrator
+    ansible_user: '.\Administrator'
+    ansible_winrm_transport: ntlm
     notepadplusplus_package_name: notepadplusplus
     notepadplusplus_version: ""
     notepadplusplus_install_paths:
@@ -90,9 +91,11 @@
       become: false
       no_log: "{{ ae_hide_sensitive_data }}"
 
-    - name: Set Windows connection password
+    - name: Set Windows connection credentials
       ansible.builtin.set_fact:
+        ansible_user: '.\Administrator'
         ansible_password: "{{ instance_password.win_password }}"
+        ansible_become_password: "{{ instance_password.win_password }}"
       no_log: "{{ ae_hide_sensitive_data }}"
 
   tasks:
