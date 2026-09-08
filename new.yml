@@ -8,13 +8,89 @@
 
   collections:
     - ansible.windows
+    - amazon.aws
+    - community.aws
 
   vars:
+    ae_hide_sensitive_data: true
+    ae_awx_cross_account_role: "arn:aws:iam::{{ owner_id }}:role/CrossAccountSignin-infra"
+    aws_pem_secret_name: my-windows-key
     notepadplusplus_package_name: notepadplusplus
     notepadplusplus_version: ""
     notepadplusplus_install_paths:
       - C:\Program Files\Notepad++\notepad++.exe
       - C:\Program Files (x86)\Notepad++\notepad++.exe
+
+  pre_tasks:
+    - name: Validate EC2 password bootstrap variables
+      ansible.builtin.assert:
+        that:
+          - instance_id is defined
+          - placement is defined
+          - placement.region is defined
+          - owner_id is defined
+        fail_msg: >-
+          The EC2 inventory source must provide instance_id, placement.region,
+          and owner_id for EC2 Windows password decryption.
+      delegate_to: localhost
+      become: false
+
+    - name: Assume target account role for Windows password retrieval
+      amazon.aws.sts_assume_role:
+        role_arn: "{{ ae_awx_cross_account_role }}"
+        role_session_name: NotepadPlusPlusInstall
+      register: assumed_role
+      delegate_to: localhost
+      changed_when: false
+      become: false
+      no_log: "{{ ae_hide_sensitive_data }}"
+
+    - name: Retrieve EC2 key from AWS Secrets Manager
+      ansible.builtin.set_fact:
+        pem_secret: >-
+          {{ lookup(
+            'amazon.aws.aws_secret',
+            aws_pem_secret_name,
+            region=placement.region,
+            access_key=assumed_role.sts_creds.access_key,
+            secret_key=assumed_role.sts_creds.secret_key,
+            session_token=assumed_role.sts_creds.session_token
+          ) }}
+      delegate_to: localhost
+      become: false
+      no_log: "{{ ae_hide_sensitive_data }}"
+
+    - name: Validate EC2 key secret
+      ansible.builtin.assert:
+        that:
+          - pem_secret | length > 0
+          - "'BEGIN' in pem_secret"
+          - "'PRIVATE KEY' in pem_secret"
+        fail_msg: >-
+          AWS Secrets Manager does not contain a readable PEM private key in
+          {{ aws_pem_secret_name }}.
+      delegate_to: localhost
+      become: false
+      no_log: "{{ ae_hide_sensitive_data }}"
+
+    - name: Decrypt EC2 Administrator password
+      community.aws.ec2_win_password:
+        instance_id: "{{ instance_id }}"
+        region: "{{ placement.region }}"
+        key_data: "{{ pem_secret }}"
+        access_key: "{{ assumed_role.sts_creds.access_key }}"
+        secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+        session_token: "{{ assumed_role.sts_creds.session_token }}"
+        wait: true
+      register: instance_password
+      delegate_to: localhost
+      become: false
+      no_log: "{{ ae_hide_sensitive_data }}"
+
+    - name: Set Windows connection password
+      ansible.builtin.set_fact:
+        ansible_password: "{{ instance_password.win_password }}"
+      no_log: "{{ ae_hide_sensitive_data }}"
 
   tasks:
     - name: Verify Windows connectivity
